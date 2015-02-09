@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+
+APP="$1"; IMAGE="dokku/$APP"
+source $(dirname $0)/rc
+
+CONFIG_FILE=$TR_ROOT/$APP.conf
+> "$CONFIG_FILE"
+
+PROCESSES=""
+
+while IFS=$'\t' read PROC COMMAND;
+do
+
+	PROCESSES="$PROCESSES ${APP}/${PROC}:*"
+>> "$CONFIG_FILE" cat <<-EOF
+	[program:${APP}/${PROC}]
+	command=docker run --rm -a stderr -a stdout $IMAGE ${COMMAND:-/start $PROC}
+	process_name=${APP}_${PROC}_%(process_num)02d
+	numprocs=$(dokku config:get $APP PROCESS_COUNT_$(echo $PROC|tr '[a-z]' '[A-Z]') || echo 1)
+	autostart=true
+	autorestart=true
+EOF
+
+done < <(docker run -i -a stdout -a stdin "$IMAGE" bash <<EOF
+ruby -e "require 'yaml'; puts YAML.load_file('/app/Procfile').keys if File.exist?('/app/Procfile')"
+[ -f "/app/composer.json" ] && jq -r 'if .extra.procfile then .extra.procfile else [] end | to_entries | map(.key + "\t" + .value) | .[]' /app/composer.json
+EOF
+)
+
+[ -s "$CONFIG_FILE" ] || rm "$CONFIG_FILE" || :
+
+# you slick motherfucker:
+TR_CONTAINER=$(docker ps -q | grep $(cat "$TR_ROOT"/.cid 2>&- | cut -b 1-12 || echo "-") || :)
+
+if [ $(ls -1 "$TR_ROOT" | grep -cE ".conf$") -eq 0 ]; then
+	[ -n "$TR_CONTAINER" ] && docker stop $TR_CONTAINER || :
+else
+	if [ -z "$TR_CONTAINER" ]; then
+		TR_CONTAINER=$(docker run -d -v /var/run/docker.sock:/var/run/docker.sock -v "$TR_ROOT":/etc/supervisor/conf.d $TR_IMAGE_NAME)
+		echo $TR_CONTAINER > "$TR_ROOT/.cid"
+	else
+		$(dirname $0)/ctl reread
+		$(dirname $0)/ctl restart $PROCESSES
+	fi
+fi
+

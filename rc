@@ -1,0 +1,3 @@
+export TR_IMAGE_NAME=${TR_IMAGE_NAME:-nassau/dokku-task-runner}
+export DOKKU_ROOT=${DOKKU_ROOT:-/home/dokku}
+export TR_ROOT=$DOKKU_ROOT/.supervisor

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+
+source $(dirname $0)/rc
+
+if ! docker inspect $TR_IMAGE_NAME >/dev/null 2>&1; then
+	docker build -t $TR_IMAGE_NAME etc/
+fi
+
+mkdir -p "$TR_ROOT"
