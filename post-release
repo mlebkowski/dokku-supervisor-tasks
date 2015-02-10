@@ -8,14 +8,19 @@ CONFIG_FILE=$TR_ROOT/$APP.conf
 > "$CONFIG_FILE"
 
 PROCESSES=""
+TYPES=""
 
 while IFS=$'\t' read PROC COMMAND;
 do
 
 	PROCESSES="$PROCESSES ${APP}/${PROC}:*"
+	TYPES="$TYPES $PROC"
+
+	COMMAND=$([[ -z "${COMMAND:-}" ]] && echo "/start $PROC" || echo "/exec $COMMAND");
+
 >> "$CONFIG_FILE" cat <<-EOF
 	[program:${APP}/${PROC}]
-	command=docker run --rm -a stderr -a stdout $IMAGE ${COMMAND:-/start $PROC}
+	command=docker run --rm -a stderr -a stdout $IMAGE ${COMMAND}
 	process_name=${APP}_${PROC}_%(process_num)02d
 	numprocs=$(dokku config:get $APP PROCESS_COUNT_$(echo $PROC|tr '[a-z]' '[A-Z]') || echo 1)
 	autostart=true
@@ -28,7 +33,7 @@ ruby -e "require 'yaml'; puts YAML.load_file('/app/Procfile').keys if File.exist
 EOF
 )
 
-[ -s "$CONFIG_FILE" ] || rm "$CONFIG_FILE" || :
+[ ! -s "$CONFIG_FILE" ] && echo "       Launching runners:${TYPES}" || rm "$CONFIG_FILE" || :
 
 # you slick motherfucker:
 TR_CONTAINER=$(docker ps -q | grep $(cat "$TR_ROOT"/.cid 2>&- | cut -b 1-12 || echo "-") || :)
@@ -40,8 +45,8 @@ else
 		TR_CONTAINER=$(docker run -d -v /var/run/docker.sock:/var/run/docker.sock -v "$TR_ROOT":/etc/supervisor/conf.d $TR_IMAGE_NAME)
 		echo $TR_CONTAINER > "$TR_ROOT/.cid"
 	else
-		$(dirname $0)/ctl reread
-		$(dirname $0)/ctl restart $PROCESSES
+		dokku sctl reread
+		dokku sctl restart $PROCESSES
 	fi
 fi
 
