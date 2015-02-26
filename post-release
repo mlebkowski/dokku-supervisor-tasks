@@ -33,7 +33,7 @@ ruby -e "require 'yaml'; puts YAML.load_file('/app/Procfile').keys if File.exist
 EOF
 )
 
-[ ! -s "$CONFIG_FILE" ] && echo "       Launching runners:${TYPES}" || rm "$CONFIG_FILE" || :
+[ -s "$CONFIG_FILE" ] && echo "       Launching runners:${TYPES}" || rm "$CONFIG_FILE" || :
 
 # you slick motherfucker:
 TR_CONTAINER=$(docker ps -q | grep $(cat "$TR_ROOT"/.cid 2>&- | cut -b 1-12 || echo "-") || :)
